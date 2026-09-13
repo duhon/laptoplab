@@ -1,0 +1,22 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    restart: unless-stopped
+    environment: [PUID=1000, PGID=1000, WEBUI_PORT=8080]
+    volumes:
+      - qbt_config:/config
+      - /srv/data/downloads:/downloads
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    restart: unless-stopped
+    volumes:
+      - /srv/data:/srv
+      - fb_db:/database
+volumes: { caddy_data: {}, qbt_config: {}, fb_db: {} }
