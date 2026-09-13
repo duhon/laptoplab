@@ -1,0 +1,11 @@
+# proxy/forward-proxy-compose.yml — HTTPS forward proxy с аутентификацией на 443
+services:
+  fwdproxy:
+    image: ubuntu/squid:latest
+    restart: unless-stopped
+    ports: ["443:3128"]
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf:ro
+      - ./passwords:/etc/squid/passwords:ro   # htpasswd, креды на p4
+# squid.conf: auth_param basic, acl обязателен, https_port с TLS-сертом (Caddy/CF cert).
+# Проброс порта 443 на роутере -> бокс. Chrome SwitchyOmega -> HTTPS proxy дом:443 с логином.
