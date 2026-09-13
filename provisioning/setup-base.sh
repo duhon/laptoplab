@@ -5,7 +5,7 @@ PUBKEY="${1:?usage: setup-base.sh 'ssh-ed25519 AAAA... user'}"
 
 # SSH: ключи вместо пароля
 install -d -m700 /root/.ssh
-echo "$PUBKEY" > /root/.ssh/authorized_keys
+grep -qxF "$PUBKEY" /root/.ssh/authorized_keys 2>/dev/null || echo "$PUBKEY" >> /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
@@ -31,7 +31,10 @@ EOF
 systemctl enable hdd-spindown.service
 
 # Автоматические security-обновления
-dpkg-reconfigure -f noninteractive unattended-upgrades
+cat >/etc/apt/apt.conf.d/20auto-upgrades <<'AUTO'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+AUTO
 
 systemctl restart ssh
 echo "Базовая настройка завершена."
