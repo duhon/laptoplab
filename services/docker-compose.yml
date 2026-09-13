@@ -2,7 +2,8 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
-    ports: ["80:80"]
+    ports:
+      - "127.0.0.1:80:80"   # cloudflared → localhost; tailnet-доступ через `tailscale serve`
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

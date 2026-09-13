@@ -5,7 +5,7 @@ secrets/*
 *.key
 *.pem
 *_token
-cloudflared/*.json
+**/cloudflared/*.json
 # python
 __pycache__/
 *.pyc

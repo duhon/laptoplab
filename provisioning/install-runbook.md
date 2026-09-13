@@ -14,6 +14,11 @@
 4. GRUB → в ESP (`/dev/sdX`).
 5. Первая загрузка, `ssh` работает по паролю временно (заменим на ключи в Task 3).
 
+## Форматирование HDD (данные)
+1 ТБ HDD (отдельный диск, напр. /dev/sdb) под данные:
+`sudo mkfs.ext4 -L data /dev/sdY`   # подставить реальный диск (НЕ SSD!)
+Метка `data` обязательна — на неё ссылаются fstab.sample и hdd-spindown.service.
+
 ## Проверка
 - `sudo systemctl is-enabled ssh` → enabled
 - Обесточить и подать питание → ноут стартует сам.
