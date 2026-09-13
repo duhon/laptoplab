@@ -1,0 +1,13 @@
+# secrets & runtime
+**/.env
+secrets/*
+!secrets/README.md
+*.key
+*.pem
+*_token
+cloudflared/*.json
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
