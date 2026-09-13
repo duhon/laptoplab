@@ -26,4 +26,11 @@ services:
       - ./homepage:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /srv/data:/data:ro
+  sms-bridge:
+    build: ../sms-bridge
+    restart: unless-stopped
+    env_file: /srv/persist/services.env
+    volumes:
+      - /var/run/dbus:/var/run/dbus:ro
+    privileged: true   # доступ к модему; сузить до нужных cap при обкатке
 volumes: { caddy_data: {}, qbt_config: {}, fb_db: {} }
