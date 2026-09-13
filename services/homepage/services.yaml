@@ -1,0 +1,9 @@
+- Сервисы:
+    - qBittorrent:
+        href: /torrent/
+        description: Торренты
+        container: qbittorrent
+    - Файлы:
+        href: /files/
+        description: Файлы
+        container: filebrowser

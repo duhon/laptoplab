@@ -1,0 +1,4 @@
+- resources:
+    disk: /data
+    cpu: true
+    memory: true

@@ -1,5 +1,5 @@
 :80 {
   handle_path /torrent/* { reverse_proxy qbittorrent:8080 }
   handle_path /files/*   { reverse_proxy filebrowser:80 }
-  handle /                { respond "konotop up" 200 }
+  handle /                { reverse_proxy homepage:3000 }
 }
