@@ -1,0 +1,6 @@
+# provisioning/fstab.sample — подставить UUID из `blkid`
+UUID=<ESP>      /boot/efi   vfat  umask=0077                 0 2
+UUID=<root>     /           ext4  errors=remount-ro          0 1
+UUID=<persist>  /srv/persist ext4 defaults,nofail            0 2
+UUID=<hdd>      /srv/data   ext4  defaults,nofail,x-systemd.device-timeout=10 0 2
+# p3 (recovery) НЕ монтируется в fstab — используется только из recovery-среды
