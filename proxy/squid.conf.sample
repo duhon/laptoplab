@@ -1,0 +1,19 @@
+# proxy/squid.conf.sample — форвард-прокси с ОБЯЗАТЕЛЬНОЙ аутентификацией.
+# При деплое: скопировать в proxy/squid.conf; файл passwords создать на p4:
+#   htpasswd -c /srv/persist/proxy/passwords <user>
+# и примонтировать его как /etc/squid/passwords (см. forward-proxy-compose.yml).
+
+auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwords
+auth_param basic realm konotop
+acl authenticated proxy_auth REQUIRED
+
+# Разрешаем ТОЛЬКО аутентифицированным; всё остальное запрещаем (не открытый прокси)
+http_access allow authenticated
+http_access deny all
+
+http_port 3128
+
+# Для доступа из интернета (случай 1) прокси должен идти по TLS, чтобы креды
+# basic-auth не шли открытым текстом. В Chrome настраивается как "HTTPS proxy".
+# Раскомментировать и указать сертификат (от Caddy/Let's Encrypt), примонтированный в контейнер:
+# https_port 3128 tls-cert=/etc/squid/tls.pem
