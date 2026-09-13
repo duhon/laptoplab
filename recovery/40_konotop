@@ -1,0 +1,11 @@
+menuentry 'Обычная загрузка' { search --set=root --label root; linux /boot/vmlinuz root=LABEL=root ro quiet; initrd /boot/initrd.img }
+menuentry 'ВОССТАНОВИТЬ систему (данные сохранятся)' {
+  search --set=root --label root
+  linux /boot/vmlinuz ro konotop.recover=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
+  initrd /boot/konotop-recovery.img
+}
+menuentry 'Снять золотой снимок (для админа)' {
+  search --set=root --label root
+  linux /boot/vmlinuz ro konotop.rebless=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
+  initrd /boot/konotop-recovery.img
+}
