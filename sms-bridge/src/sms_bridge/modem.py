@@ -17,9 +17,9 @@ def list_message_ids(runner) -> list[str]:
 
 def read_message(runner, msg_id: str) -> Sms:
     out = runner(["mmcli", "-m", "any", "-s", msg_id, "-K"])
-    number = re.search(r"(?m)^\s*sms\.content\.number\s*:\s*(\S+)", out)
-    text = re.search(r"(?m)^\s*sms\.content\.text\s*:\s*(.+?)\s*$", out)
-    ts = re.search(r"(?m)^\s*sms\.properties\.timestamp\s*:\s*(\S+)", out)
+    number = re.search(r"(?m)^[ \t]*sms\.content\.number[ \t]*:[ \t]*(\S+)", out)
+    text = re.search(r"(?m)^[ \t]*sms\.content\.text[ \t]*:[ \t]*(.+?)[ \t]*$", out)
+    ts = re.search(r"(?m)^[ \t]*sms\.properties\.timestamp[ \t]*:[ \t]*(\S+)", out)
     if not number or not text:
         raise ValueError(f"cannot parse SMS {msg_id} from mmcli -K output")
     return Sms(

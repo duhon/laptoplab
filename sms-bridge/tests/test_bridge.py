@@ -35,3 +35,11 @@ def test_forward_new_keeps_sms_on_send_failure():
     n = bridge.forward_new(runner, "TOK", "42", sender=lambda t, c, txt: False)
     assert n == 0
     assert runner.deleted == []
+
+
+def test_forward_new_skips_unparseable_without_delete():
+    details = {"0": "sms.properties.state : received\n"}
+    runner = make_runner(["0"], details)
+    n = bridge.forward_new(runner, "TOK", "42", sender=lambda t, c, txt: True)
+    assert n == 0
+    assert runner.deleted == []

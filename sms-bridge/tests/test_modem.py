@@ -32,3 +32,10 @@ def test_read_message_raises_on_unparseable():
     runner = lambda args: "sms.properties.state : received\n"
     with pytest.raises(ValueError):
         modem.read_message(runner, "9")
+
+
+def test_read_message_raises_on_empty_field():
+    import pytest
+    runner = lambda args: "sms.content.number : \nsms.content.text : hi\nsms.properties.timestamp : x\n"
+    with pytest.raises(ValueError):
+        modem.read_message(runner, "0")
