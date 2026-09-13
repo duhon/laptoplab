@@ -36,7 +36,21 @@ for tok in $CMDLINE; do
     REC_PART=*)  export REC_PART="${tok#REC_PART=}" ;;
   esac
 done
-if [ "$MODE" = recover ]; then sh /usr/lib/konotop/restore.sh; else sh /usr/lib/konotop/rebless.sh; fi
+# ВАЖНО: bash, а не sh — скрипты используют bash-синтаксис ([[ ]])
+if [ "$MODE" = recover ]; then
+  bash /usr/lib/konotop/restore.sh
+else
+  bash /usr/lib/konotop/rebless.sh
+fi
+rc=$?
+# журнал результата на p3 для пост-мортема (пишется и при провале)
+if mkdir -p /mnt/reclog && mount "$REC_PART" /mnt/reclog 2>/dev/null; then
+  echo "$(cat /proc/uptime) mode=$MODE rc=$rc" >> /mnt/reclog/last-recovery.log
+  umount /mnt/reclog 2>/dev/null || true
+fi
+if [ "$rc" -ne 0 ]; then
+  echo "konotop: '$MODE' FAILED rc=$rc — загрузка в обычном режиме для диагностики" > /dev/kmsg 2>/dev/null || true
+fi
 sync
 reboot -f
 EOF
