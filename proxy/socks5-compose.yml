@@ -1,0 +1,9 @@
+# proxy/socks5-compose.yml — bind ТОЛЬКО на tailnet-IP (не 0.0.0.0)
+services:
+  socks5:
+    image: serjs/go-socks5-proxy:latest
+    restart: unless-stopped
+    ports: ["<TAILNET_IP>:1080:1080"]
+    environment:
+      - PROXY_USER=konotop
+      - PROXY_PASSWORD=${SOCKS_PASSWORD}
