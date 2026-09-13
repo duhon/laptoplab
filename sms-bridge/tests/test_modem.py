@@ -1,8 +1,9 @@
 from sms_bridge import modem
 
 LIST_OUT = """\
-/org/freedesktop/ModemManager1/SMS/0 (received)
-/org/freedesktop/ModemManager1/SMS/2 (received)
+modem.messaging.sms.length     : 2
+modem.messaging.sms.value[1]   : /org/freedesktop/ModemManager1/SMS/0
+modem.messaging.sms.value[2]   : /org/freedesktop/ModemManager1/SMS/2
 """
 
 def test_list_message_ids_parses_paths():
@@ -11,11 +12,10 @@ def test_list_message_ids_parses_paths():
 
 
 DETAIL_OUT = """\
-  -----------------------------
-  Content    |  number: +79991234567
-             |    text: Привет мир
-  -----------------------------
-  Properties |    timestamp: 2026-09-13T10:00:00+03:00
+sms.content.number       : +79991234567
+sms.content.text         : Привет мир
+sms.properties.timestamp : 2026-09-13T10:00:00+03:00
+sms.properties.state     : received
 """
 
 def test_read_message_parses_fields():
@@ -25,3 +25,10 @@ def test_read_message_parses_fields():
     assert sms.sender == "+79991234567"
     assert sms.text == "Привет мир"
     assert sms.timestamp.startswith("2026-09-13")
+
+
+def test_read_message_raises_on_unparseable():
+    import pytest
+    runner = lambda args: "sms.properties.state : received\n"
+    with pytest.raises(ValueError):
+        modem.read_message(runner, "9")
