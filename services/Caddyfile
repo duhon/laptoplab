@@ -9,8 +9,8 @@
   }
   handle_path /torrent/* {
     reverse_proxy qbittorrent:8080 {
-      header_up Host {proxy_host}
-      header_up X-Forwarded-Host {proxy_host}
+      header_up Host {http.request.host}
+      header_up X-Forwarded-Host {http.request.host}
       header_up X-Forwarded-Proto {proxy_proto}
     }
   }
@@ -29,6 +29,6 @@
     }
   }
   handle {
-    reverse_proxy homepage:3000
+    respond "konotop services: /torrent/ /files/ /portainer/ (see NAS panel for dashboard)" 200
   }
 }

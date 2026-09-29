@@ -17,21 +17,28 @@ services:
   filebrowser:
     image: filebrowser/filebrowser:latest
     restart: unless-stopped
+    environment:
+      FB_BASEURL: /files
     volumes:
       - /srv/data:/srv
       - fb_db:/database
-  homepage:
-    image: ghcr.io/gethomepage/homepage:latest
+      - ./filebrowser/settings.json:/config/settings.json:ro
+  portainer:
+    image: portainer/portainer-ce:latest
+    command: --base-url /portainer
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9443:9443"
     volumes:
-      - ./homepage:/app/config
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /srv/data:/data:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
   sms-bridge:
+    profiles: ["sms"]
     build: ../sms-bridge
     restart: unless-stopped
     env_file: /srv/persist/services.env
     volumes:
       - /var/run/dbus:/var/run/dbus:ro
     privileged: true   # доступ к модему; сузить до нужных cap при обкатке
-volumes: { caddy_data: {}, qbt_config: {}, fb_db: {} }
+volumes: { caddy_data: {}, qbt_config: {}, fb_db: {}, portainer_data: {} }
