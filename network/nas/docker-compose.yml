@@ -1,0 +1,36 @@
+# network/nas/docker-compose.yml — мост на NAS (Armbian) в LAN рабочего ноута.
+# NAS уже в tailnet (Task 7). Здесь три сервиса:
+#   panel-proxy — reverse proxy к веб-панели konotop (через `tailscale serve`);
+#   ssh-relay — TCP relay для end-to-end SSH к konotop;
+#   socks-relay — TCP-релей LAN → SOCKS5 konotop (выход домашним IP).
+# Значения берутся из network/nas/.env (см. .env.sample).
+services:
+  panel-proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - KONOTOP_HOST=${KONOTOP_HOST}
+      - KONOTOP_TS_IP=${KONOTOP_TS_IP}
+      - NAS_LAN_IP=${NAS_LAN_IP}
+      - PANEL_PORT=${PANEL_PORT}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+  ssh-relay:
+    image: alpine/socat:latest
+    restart: unless-stopped
+    network_mode: host
+    # End-to-end SSH to konotop; no TCP forwarding enabled in NAS sshd.
+    command:
+      - "TCP-LISTEN:${SSH_RELAY_PORT},bind=${NAS_LAN_IP},fork,reuseaddr"
+      - "TCP:${KONOTOP_TS_IP}:22"
+
+  socks-relay:
+    image: alpine/socat:latest
+    restart: unless-stopped
+    network_mode: host
+    # LAN:1080 → unauthenticated SOCKS5 on konotop; accessible to the trusted LAN.
+    command:
+      - "TCP-LISTEN:${SOCKS_PORT},bind=${NAS_LAN_IP},fork,reuseaddr"
+      - "TCP:${KONOTOP_TS_IP}:1080"

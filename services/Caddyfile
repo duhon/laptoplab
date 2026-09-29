@@ -1,5 +1,34 @@
 :80 {
-  handle_path /torrent/* { reverse_proxy qbittorrent:8080 }
-  handle_path /files/*   { reverse_proxy filebrowser:80 }
-  handle /                { reverse_proxy homepage:3000 }
+  map {http.request.header.X-Original-Host} {proxy_host} {
+    - {http.request.host}
+    default {http.request.header.X-Original-Host}
+  }
+  map {http.request.header.X-Original-Proto} {proxy_proto} {
+    - {http.request.header.X-Forwarded-Proto}
+    default {http.request.header.X-Original-Proto}
+  }
+  handle_path /torrent/* {
+    reverse_proxy qbittorrent:8080 {
+      header_up Host {proxy_host}
+      header_up X-Forwarded-Host {proxy_host}
+      header_up X-Forwarded-Proto {proxy_proto}
+    }
+  }
+  handle /files/* {
+    reverse_proxy filebrowser:80 {
+      header_up Host {proxy_host}
+      header_up X-Forwarded-Host {proxy_host}
+      header_up X-Forwarded-Proto {proxy_proto}
+    }
+  }
+  handle /portainer/* {
+    reverse_proxy portainer:9000 {
+      header_up Host {proxy_host}
+      header_up X-Forwarded-Host {proxy_host}
+      header_up X-Forwarded-Proto {proxy_proto}
+    }
+  }
+  handle {
+    reverse_proxy homepage:3000
+  }
 }

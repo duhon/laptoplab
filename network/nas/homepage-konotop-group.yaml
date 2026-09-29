@@ -1,0 +1,24 @@
+# network/nas/homepage-konotop-group.yaml
+# Группа для Homepage НА NAS (/docker-files/homepage/config/services.yaml).
+# Даёт рабочему ноуту ссылки на сервисы konotop прямо из Homepage NAS.
+# Порт PANEL_PORT=8095 показывает Homepage NAS и проксирует app-пути в tailnet.
+#
+# Как применить: вставить этот блок в services.yaml на NAS как ещё одну группу
+# верхнего уровня (рядом с Infrastructure/Disks/System). Порт 8095 привести в
+# соответствие с network/nas/.env (PANEL_PORT). После правки перезапустить
+# контейнер homepage на NAS.
+#
+# App-пути проксируются через NAS → Tailscale Serve → Caddy konotop.
+- Konotop (домашний сервер):
+    - qBittorrent:
+        href: http://192.168.68.59:8095/torrent/
+        description: Торренты (konotop)
+        icon: qbittorrent.png
+    - FileBrowser:
+        href: http://192.168.68.59:8095/files/
+        description: Файлы /srv/data (konotop)
+        icon: filebrowser.png
+    - Portainer:
+        href: http://192.168.68.59:8095/portainer/
+        description: Docker konotop
+        icon: portainer.png

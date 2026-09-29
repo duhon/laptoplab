@@ -1,0 +1,37 @@
+# network/nas/Caddyfile — reverse proxy: рабочий ноут → веб-панель konotop.
+# Коннект идёт на tailnet-IP, чтобы не зависеть от MagicDNS внутри Docker;
+# tls_server_name проверяет сертификат Serve по MagicDNS-имени konotop.
+{
+	admin off
+	auto_https off
+}
+
+(konotop_proxy) {
+	reverse_proxy https://{$KONOTOP_TS_IP} {
+		header_up Host {$KONOTOP_HOST}
+		header_up X-Original-Host {http.request.host}
+		header_up X-Original-Proto {http.request.scheme}
+		transport http {
+			tls_server_name {$KONOTOP_HOST}
+		}
+	}
+}
+
+http://{$NAS_LAN_IP}:{$PANEL_PORT} {
+	bind {$NAS_LAN_IP}
+
+	handle /torrent/* {
+		import konotop_proxy
+	}
+	handle /files/* {
+		import konotop_proxy
+	}
+	handle /portainer/* {
+		import konotop_proxy
+	}
+	handle {
+		reverse_proxy 127.0.0.1:80 {
+			header_up Host {$NAS_LAN_IP}
+		}
+	}
+}
