@@ -83,7 +83,7 @@ tailscale serve status            # https://konotop.tailb4dba1.ts.net → 127.0.
 
 ```bash
 cp network/nas/.env.sample network/nas/.env
-# проверить NAS_LAN_IP, KONOTOP_TS_IP, KONOTOP_HOST и PANEL_PORT
+# проверить NAS_LAN_IP, NAS_BRIDGE_DIR, KONOTOP_TS_IP, KONOTOP_HOST и порты
 sudo docker compose --env-file network/nas/.env \
   -f network/nas/docker-compose.yml up -d panel-proxy ssh-relay
 ```

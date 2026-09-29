@@ -15,7 +15,7 @@ services:
       - NAS_LAN_IP=${NAS_LAN_IP}
       - PANEL_PORT=${PANEL_PORT}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${NAS_BRIDGE_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
 
   ssh-relay:
     image: alpine/socat:latest
