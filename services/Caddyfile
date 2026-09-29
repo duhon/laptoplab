@@ -21,7 +21,7 @@
       header_up X-Forwarded-Proto {proxy_proto}
     }
   }
-  handle /portainer/* {
+  handle_path /portainer/* {
     reverse_proxy portainer:9000 {
       header_up Host {proxy_host}
       header_up X-Forwarded-Host {proxy_host}
