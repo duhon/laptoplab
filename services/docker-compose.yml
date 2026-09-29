@@ -27,6 +27,10 @@ services:
     image: portainer/portainer-ce:latest
     command: --base-url /portainer
     restart: unless-stopped
+    environment:
+      # Portainer CSRF-защита сверяет заголовок Origin с этим списком;
+      # без него запросы через прокси NAS (Origin с портом 8095) получают 403.
+      - TRUSTED_ORIGINS=http://192.168.68.59:8095
     ports:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9443:9443"
