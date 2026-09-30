@@ -11,6 +11,11 @@ def test_list_message_ids_parses_paths():
     assert modem.list_message_ids(runner) == ["0", "2"]
 
 
+def test_list_message_ids_returns_empty_when_no_messages():
+    runner = lambda args: "modem.messaging.sms : 0\n"
+    assert modem.list_message_ids(runner) == []
+
+
 DETAIL_OUT = """\
 sms.content.number       : +79991234567
 sms.content.text         : Привет мир

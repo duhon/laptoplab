@@ -5,7 +5,11 @@ from . import bridge, config
 
 
 def runner(args):
-    return subprocess.run(args, capture_output=True, text=True).stdout
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(f"{args[0]} exited with status {result.returncode}: {detail}")
+    return result.stdout
 
 
 def main():

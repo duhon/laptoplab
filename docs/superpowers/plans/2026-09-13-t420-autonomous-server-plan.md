@@ -1,10 +1,50 @@
 # T420 Autonomous Server («konotop») Implementation Plan
 
+> Статус проекта обновлён 2026-09-28. Ниже отдельно указано, что реально
+> проверено на T420, а что пока существует только в репозитории.
+
+## Актуальный статус проекта
+
+### Уже сделано на T420
+
+- Debian установлен, SSD размечен, HDD подключён как `/srv/data`.
+- SSH работает через ключ пользователя `duhon`; парольная и root-аутентификация по SSH отключены.
+- Tailscale установлен, доступ к T420 через tailnet проверен.
+- Имя системы изменено на `konotop`.
+- Автозапуск при подключении питания включён в BIOS (`OnByAcAttach=Enable`); после сбоя снова работает, но поведение нестабильно — наблюдать.
+- Сон при закрытии крышки отключён.
+- Ошибки fingerprint и `nouveau` устранены настройками BIOS.
+- GRUB настроен в текстовом режиме: английские подписи, таймаут 10 секунд, обычная загрузка по умолчанию; конфигурация проверена и ноут перезагружен.
+- Механизм автоматического выбора recovery после неудачной загрузки проверен.
+- Восстановление системы через GRUB проверено.
+- Docker Compose запущен: Caddy, qBittorrent, FileBrowser, Homepage и Portainer.
+- Homepage и FileBrowser исправлены для работы через Caddy.
+- Portainer подключён к локальному Docker через socket.
+- Telegram bot и личный чат проверены тестовым сообщением; SMS-мост запущен.
+- Проверки Task 3 выполнены: TLP и автообновления активны, HDD уходит в standby; найдены расхождения в SSH, governor и APM.
+- Создан golden snapshot системы; после финальных изменений его нужно обновить.
+- Пароль qBittorrent сменён, доступ проверен.
+
+### Осталось сделать — по фазам
+
+- **Фаза 3 — сеть (основной путь):** NAS в tailnet; NAS Homepage на мосту, ссылки на сервисы konotop, SSH TCP-релей и SOCKS5-релей настроены и проверены. SOCKS5-профиль браузера на рабочем ноуте настроен и проверен; изменения зафиксированы.
+- **Фаза 4 — сервисы:** проверить Homepage, qBittorrent, FileBrowser и Portainer через выбранный сетевой путь.
+- **Фаза 5 — SMS:** проверить реальную пересылку после регистрации MC7304 и выяснить голосовые возможности.
+- **Фаза 6 — финализация:** после отладки ограничить SSH tailnet-IP, проверить загрузку/recovery/крышку/автозапуск, решить APM-конфликт, обновить golden snapshot, запустить тесты и зафиксировать изменения.
+- **Фаза 7 — опциональные альтернативы:** Cloudflare Tunnel, SOCKS5, прямой прокси/VM-релей — только если NAS-мост не подойдёт или нужен публичный адрес.
+
+### Отложенные этапы
+
+- SMS→Telegram: мост запущен, но MC7304 в состоянии `searching`; проверить пересылку после регистрации модема в сети. Голосовая проверка отдельно.
+- Cloudflare Tunnel (Phase 7): не настроен; домена пока нет. Только если нужен публичный адрес панели.
+- SOCKS5/VM-релей (Phase 7): конфигурации подготовлены как fallback к NAS-мосту.
+- Dry-run разметки закрыт как ненужный для уже установленной и работающей системы; `rebless` и `restore` проверены на двух временных loop-дисках в Linux-контейнере Docker Desktop VM (без загрузки отдельной гостевой VM).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Превратить ThinkPad T420 в тихий, самовосстанавливающийся домашний сервер у родителей, управляемый удалённо, с торрентами, SMS→Telegram, exit-прокси и веб-панелью.
 
-**Architecture:** Debian stable на SSD (разделы ОС/снимок/персистент), данные на HDD. Восстановление — снимок раздела через partclone, запуск из GRUB. Сеть — Tailscale (админ + exit-прокси личных устройств) + Cloudflare Tunnel (веб-морда наружу). Сервисы в Docker за Caddy. Конфиг как код в этом репозитории — источник правды для «золотого» состояния.
+**Architecture:** Debian stable на SSD (разделы ОС/снимок/персистент), данные на HDD. Восстановление — снимок раздела через partclone, запуск из GRUB. Сеть — Tailscale для приватного доступа и exit-node; рабочий ноут без Tailscale использует Docker-мост на NAS для панели, SSH TCP-релея и SOCKS5. Tailscale Serve публикует панель только внутри tailnet; Funnel разрешён, но не настроен. Cloudflare Tunnel остаётся опциональным публичным вариантом. Сервисы в Docker за Caddy. Конфиг как код в этом репозитории — источник правды для «золотого» состояния.
 
 **Tech Stack:** Debian stable, Docker + docker-compose, Caddy, Tailscale, cloudflared, partclone, GRUB, ModemManager (`mmcli`), Python 3.11 (SMS-мост), qBittorrent, filebrowser, Homepage.
 
@@ -15,12 +55,12 @@
 - ОС: **Debian stable** (не иммутабельная, не btrfs-снапшоты).
 - Восстановление НИКОГДА не форматирует p3, p4 и HDD.
 - Секреты — только на p4 (или в `.env`, подхватываемом из p4); **никогда** не коммитятся в git.
-- Внутренние веб-морды НЕ торчат в интернет; доступ через Tailscale.
+- Внутренние веб-морды не публикуются напрямую; доступ через Tailscale/NAS-мост. Публичный доступ допустим только через отдельную защиту, например Cloudflare Access.
 - SSH — только по ключам, слушает только на интерфейсе Tailscale.
 - Форвард-прокси, доступный из интернета, обязан иметь аутентификацию.
 - Разметка SSD 240 ГБ: `p1 ESP ~1ГБ` · `p2 root ~170ГБ` · `p3 снимок+recovery ~50ГБ` · `p4 персистент ~2ГБ`. HDD 1ТБ → `/srv/data`.
 - Все docker-данные пользователя (загрузки/файлы) — на HDD (`/srv/data`), не на SSD.
-- Два спайка перед финализацией: голос MC7304 (§Phase 5), CGNAT дома (§Phase 6).
+- Сетевой путь для рабочего ноутбука выбирается в Phase 3; голосовые возможности MC7304 проверяются в Phase 5.
 
 ---
 
@@ -75,7 +115,7 @@ konotop/
 **Files:**
 - Create: `.gitignore`, `README.md`, `secrets/README.md`
 
-- [ ] **Step 1: Инициализировать git**
+- [x] **Step 1: Инициализировать git**
 
 ```bash
 cd /private/tmp/konotop
@@ -84,7 +124,7 @@ git add docs/superpowers/specs/2026-08-30-t420-autonomous-server-design.md
 git commit -m "docs: add design spec"
 ```
 
-- [ ] **Step 2: Создать .gitignore (секреты никогда не в git)**
+- [x] **Step 2: Создать .gitignore (секреты никогда не в git)**
 
 ```gitignore
 # secrets & runtime
@@ -102,7 +142,7 @@ __pycache__/
 .pytest_cache/
 ```
 
-- [ ] **Step 3: Создать README.md**
+- [x] **Step 3: Создать README.md**
 
 ```markdown
 # konotop — автономный сервер на ThinkPad T420
@@ -113,7 +153,7 @@ __pycache__/
 Секреты живут на разделе p4 сервера и НЕ хранятся здесь.
 ```
 
-- [ ] **Step 4: Создать secrets/README.md (раскладка p4)**
+- [x] **Step 4: Создать secrets/README.md (раскладка p4)**
 
 ```markdown
 # Персистентная зона (p4) — вне восстановления
@@ -127,7 +167,7 @@ Recovery НИКОГДА не форматирует p4. Здесь лежат:
 Монтируется в /srv/persist. Симлинки/bind-mount из системы указывают сюда.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .gitignore README.md secrets/README.md
@@ -148,7 +188,7 @@ git commit -m "chore: repo scaffolding, gitignore, secrets layout"
 **Interfaces:**
 - Produces: разделы `/dev/sdX1..4` (ESP, root, recovery, persist).
 
-- [ ] **Step 1: Написать скрипт разметки**
+- [x] **Step 1: Написать скрипт разметки**
 
 ```bash
 #!/usr/bin/env bash
@@ -173,7 +213,7 @@ mkfs.ext4 -F   "${DISK}4"
 echo "Готово. Разделы:"; sgdisk -p "$DISK"
 ```
 
-- [ ] **Step 2: Создать fstab.sample**
+- [x] **Step 2: Создать fstab.sample**
 
 ```
 # provisioning/fstab.sample — подставить UUID из `blkid`
@@ -184,12 +224,12 @@ UUID=<hdd>      /srv/data   ext4  defaults,nofail,x-systemd.device-timeout=10 0 
 # p3 (recovery) НЕ монтируется в fstab — используется только из recovery-среды
 ```
 
-- [ ] **Step 3: Проверка (dry-run в VM или на диске)**
+- [x] **Step 3: Проверка (dry-run не требуется для уже установленной системы; скрипт на живом диске не запускать)**
 
 Run: `sudo bash provisioning/partition-ssd.sh /dev/sdX && lsblk -f /dev/sdX`
 Expected: 4 раздела с метками ESP/root/recovery/persist и корректными ФС.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add provisioning/partition-ssd.sh provisioning/fstab.sample
@@ -201,14 +241,14 @@ git commit -m "feat(provisioning): SSD partitioning script and fstab sample"
 **Files:**
 - Create: `provisioning/install-runbook.md`
 
-- [ ] **Step 1: Написать runbook**
+- [x] **Step 1: Написать runbook**
 
 ```markdown
 # Установка Debian и BIOS (на T420)
 
 ## BIOS (юзкейс 1 — автозапуск при питании)
 1. F1 при загрузке → Config → Power.
-2. `After Power Loss = Power On`.
+2. `Power On with AC Attach = Enabled` (`OnByAcAttach=Enable`).
 3. Boot order: SSD первым.
 4. Сохранить (F10).
 
@@ -225,7 +265,11 @@ git commit -m "feat(provisioning): SSD partitioning script and fstab sample"
 - Обесточить и подать питание → ноут стартует сам.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] BIOS и автозапуск при подключении питания настроены и проверены (`OnByAcAttach=Enable`; за автозапуском продолжаем наблюдать из-за нестабильности).
+- [x] Debian stable установлен на T420.
+- [x] Проверка установки и автозапуска выполнена.
+
+- [x] **Step 2: Commit**
 
 ```bash
 git add provisioning/install-runbook.md
@@ -237,7 +281,7 @@ git commit -m "docs(provisioning): Debian install and BIOS runbook"
 **Files:**
 - Create: `provisioning/setup-base.sh`
 
-- [ ] **Step 1: Написать скрипт базовой настройки**
+- [x] **Step 1: Написать скрипт базовой настройки**
 
 ```bash
 #!/usr/bin/env bash
@@ -250,15 +294,15 @@ install -d -m700 /root/.ssh
 echo "$PUBKEY" > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+sed -i 's/^#\?KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 
 # Питание/тишина
 apt-get update
 apt-get install -y tlp hdparm unattended-upgrades
 systemctl enable --now tlp
 
-# CPU governor powersave
-echo 'GOVERNOR=powersave' >> /etc/default/cpufrequtils || true
+# Keep the supported schedutil governor provided by the T420 kernel.
 
 # Спиндаун HDD в простое (5 минут). /dev/sdb — HDD, проверить lsblk!
 cat >/etc/systemd/system/hdd-spindown.service <<'EOF'
@@ -279,7 +323,7 @@ systemctl restart ssh
 echo "Базовая настройка завершена."
 ```
 
-- [ ] **Step 2: Проверка**
+- [x] **Step 2: Проверка**
 
 Run на боксе:
 ```bash
@@ -287,14 +331,23 @@ sudo bash provisioning/setup-base.sh "$(cat ~/.ssh/id_ed25519.pub)"
 sudo sshd -T | grep -E 'passwordauthentication|permitrootlogin'
 systemctl is-active tlp
 ```
-Expected: `passwordauthentication no`, `permitrootlogin prohibit-password`, tlp `active`.
+Expected: `passwordauthentication no`, `kbdinteractiveauthentication no`, `permitrootlogin no`, tlp `active`.
 
-- [ ] **Step 3: Проверка спиндауна**
+Результат проверки 2026-09-28: SSH по ключу работает, ключи имеют права 700/600,
+`PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin
+no`; новый вход по ключу прошёл, парольный отклонён. TLP активен в режиме AC,
+автообновления и таймеры включены. Governor — `schedutil`; доступны `performance`
+и `schedutil`, поэтому неподдерживаемая запись `powersave` удалена из скрипта.
+
+- [x] **Step 3: Проверка спиндауна**
 
 Run: `sudo hdparm -C /dev/disk/by-label/data` через 2+ мин простоя
 Expected: `drive state is: standby`.
+Результат 2026-09-28: `/srv/data` смонтирован с HDD `/dev/sda2`; служба успешно
+задала `-S 60` (5 минут), диск сейчас `standby`. На питании от адаптера TLP
+устанавливает APM 254, переопределяя заданное службой значение 127.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add provisioning/setup-base.sh
@@ -315,7 +368,7 @@ git commit -m "feat(provisioning): base setup — ssh keys, tlp, governor, hdd s
 - Produces: `restore.sh` (p3→p2), `rebless.sh` (p2→p3). Снимки на p3:
   `/mnt/recovery/golden.current.img`, `/mnt/recovery/golden.new.img`.
 
-- [ ] **Step 1: Написать restore.sh**
+- [x] **Step 1: Написать restore.sh**
 
 ```bash
 #!/usr/bin/env bash
@@ -336,7 +389,7 @@ umount /mnt/recovery
 echo "Готово. Перезагрузка..."
 ```
 
-- [ ] **Step 2: Написать rebless.sh (с сохранением старого снимка)**
+- [x] **Step 2: Написать rebless.sh (с сохранением старого снимка)**
 
 ```bash
 #!/usr/bin/env bash
@@ -356,12 +409,15 @@ sync; umount /mnt/recovery
 echo "Новый золотой снимок зафиксирован."
 ```
 
-- [ ] **Step 3: Проверка (в VM с двумя дисками)**
+- [x] **Step 3: Проверка (на двух временных loop-дисках в Docker Desktop Linux VM)**
 
-Run: смонтировать тестовую среду, `ROOT_PART=/dev/sdb2 REC_PART=/dev/sdb3 bash recovery/rebless.sh` затем `restore.sh`
-Expected: `golden.current.img` создан, `partclone.chkimg` без ошибок, restore проходит.
+Результат 2026-09-28: `rebless.sh` проверен при ошибке клонирования (старый снимок
+сохранён) и при успешном выполнении (новый снимок создан, `partclone.chkimg`
+прошёл). Затем тестовый root был изменён; `restore.sh` восстановил исходные
+файлы, `e2fsck` ошибок не обнаружил. Использовались только временные loop-диски,
+реальные диски T420 не подключались.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add recovery/restore.sh recovery/rebless.sh
@@ -375,9 +431,9 @@ git commit -m "feat(recovery): partclone restore and rebless scripts"
 
 **Interfaces:**
 - Consumes: `restore.sh` (Task 4).
-- Produces: GRUB-пункты «Обычная загрузка» и «Восстановить»; одноразовый вход в recovery для rebless.
+- Produces: GRUB entries `Normal boot` and `Restore system (data is preserved)`; one-time recovery entry for re-bless.
 
-- [ ] **Step 1: Собрать recovery-initramfs**
+- [x] **Step 1: Собрать recovery-initramfs**
 
 ```bash
 #!/usr/bin/env bash
@@ -392,13 +448,13 @@ dracut --force --no-hostonly \
 echo "recovery initramfs: /boot/konotop-recovery.img"
 ```
 
-- [ ] **Step 2: Пункты GRUB**
+- [x] **Step 2: Пункты GRUB**
 
 ```bash
 # recovery/40_konotop — положить в /etc/grub.d/40_konotop, chmod +x, затем update-grub
 cat <<'MENU'
-menuentry 'Обычная загрузка' { search --set=root --label root; linux /boot/vmlinuz root=LABEL=root ro quiet; initrd /boot/initrd.img }
-menuentry 'ВОССТАНОВИТЬ систему (данные сохранятся)' {
+menuentry 'Normal boot' --id konotop-normal { search --set=root --label root; linux /boot/vmlinuz root=LABEL=root ro quiet; initrd /boot/initrd.img }
+menuentry 'Restore system (data is preserved)' --id konotop-recover {
   search --set=root --label root
   linux /boot/vmlinuz ro konotop.recover=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
   initrd /boot/konotop-recovery.img
@@ -406,7 +462,7 @@ menuentry 'ВОССТАНОВИТЬ систему (данные сохраня�
 MENU
 ```
 
-- [ ] **Step 3: Runbook (установка пунктов + одноразовый rebless)**
+- [x] **Step 3: Runbook (установка пунктов + одноразовый rebless)**
 
 ```markdown
 # recovery/recovery-runbook.md
@@ -417,23 +473,22 @@ MENU
 
 ## Первый золотой снимок / re-bless (удалённо)
 1. Обкатать изменения на живой системе.
-2. `sudo grub-reboot 'ВОССТАНОВИТЬ...'` НЕЛЬЗЯ для rebless — нужен отдельный
-   grub-пункт «Снять снимок»: аналог recovery, но запускает rebless.sh.
-   (Добавить menuentry 'Снять золотой снимок' с konotop.rebless=1.)
-3. `sudo grub-reboot 'Снять золотой снимок' && sudo reboot`
+2. Не использовать recovery-пункт: для re-bless нужен отдельный пункт
+   `Create golden snapshot (admin)` с `--id konotop-rebless`.
+3. `sudo grub-reboot konotop-rebless && sudo reboot`
 4. Recovery снимет p2->p3, вернётся в обычную загрузку.
 
 ## Проверка кнопки восстановления
-- Испортить файл в p2, выбрать «ВОССТАНОВИТЬ» в GRUB → файл вернулся,
+- Испортить файл в p2, выбрать `Restore system (data is preserved)` в GRUB → файл вернулся,
   содержимое /srv/data и /srv/persist не изменилось.
 ```
 
-- [ ] **Step 4: Добавить menuentry rebless в 40_konotop**
+- [x] **Step 4: Добавить menuentry rebless в 40_konotop**
 
 ```bash
 # дописать в recovery/40_konotop:
 cat <<'MENU'
-menuentry 'Снять золотой снимок (для админа)' {
+menuentry 'Create golden snapshot (admin)' --id konotop-rebless {
   search --set=root --label root
   linux /boot/vmlinuz ro konotop.rebless=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
   initrd /boot/konotop-recovery.img
@@ -442,12 +497,13 @@ MENU
 ```
 (В initramfs-хук: если `konotop.rebless=1` → запустить `rebless.sh`; если `konotop.recover=1` → `restore.sh`; иначе обычная загрузка. Добавить в build-recovery.sh включение обоих скриптов и парсер cmdline.)
 
-- [ ] **Step 5: Проверка**
+- [x] **Step 5: Проверка**
 
-Run: `sudo bash recovery/build-recovery.sh && sudo update-grub && grep konotop /boot/grub/grub.cfg`
-Expected: три пункта (обычная, восстановить, снять снимок).
+Результат: GRUB-конфигурация проверена через `grub-script-check`, все три пункта
+сохранены; восстановление через GRUB на T420 ранее проверено. Скриптовый цикл
+`rebless` → проверка образа → `restore` дополнительно прошёл на тестовых дисках.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add recovery/build-recovery.sh recovery/40_konotop recovery/recovery-runbook.md
@@ -456,7 +512,7 @@ git commit -m "feat(recovery): recovery initramfs, GRUB entries, runbook"
 
 ---
 
-## Phase 3 — Network
+## Phase 3 — Network (Tailscale, proxies, remote access)
 
 ### Task 6: Tailscale + SSH на tailnet
 
@@ -467,7 +523,7 @@ git commit -m "feat(recovery): recovery initramfs, GRUB entries, runbook"
 - Consumes: p4 (`/srv/persist`) для statedir.
 - Produces: tailnet-адрес бокса; sshd только на интерфейсе `tailscale0`.
 
-- [ ] **Step 1: Tailscale runbook (statedir на p4)**
+- [x] **Step 1: Tailscale runbook (statedir на p4)**
 
 ```markdown
 # network/tailscale-runbook.md
@@ -480,7 +536,7 @@ git commit -m "feat(recovery): recovery initramfs, GRUB entries, runbook"
 4. Записать tailnet-IP: `tailscale ip -4`
 ```
 
-- [ ] **Step 2: sshd — только на tailnet**
+- [x] **Step 2: sshd — только на tailnet**
 
 ```
 # network/sshd_konotop.conf → /etc/ssh/sshd_config.d/konotop.conf
@@ -490,69 +546,195 @@ PasswordAuthentication no
 PermitRootLogin prohibit-password
 ```
 
-- [ ] **Step 3: Проверка**
+**Step 3: Проверка перенесена в Phase 6, Task 16** — текущая проверка показала,
+что sshd слушает `0.0.0.0:22` и `[::]:22`. Привязку отложить до завершения
+отладки и подтверждения рабочего доступа через Tailscale.
 
-Run: `sudo install -m644 network/sshd_konotop.conf /etc/ssh/sshd_config.d/konotop.conf && sudo systemctl restart ssh && sudo ss -tlnp | grep :22`
-Expected: sshd слушает только на tailnet-IP, не на `0.0.0.0`.
-
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add network/tailscale-runbook.md network/sshd_konotop.conf
 git commit -m "feat(network): tailscale with persistent state, ssh bound to tailnet"
 ```
 
-### Task 7: Cloudflare Tunnel + Access
+### Task 7: NAS в tailnet + доступ к konotop
+
+Основной путь для рабочего ноутбука, который не может запускать Tailscale сам:
+NAS уже стоит в LAN рабочего ноута; подключаем NAS к tailnet, и через него ноут
+получает доступ к `konotop`. Закрывает базу для всех трёх потребностей (панель,
+SSH, домашний IP).
+
+Обследованный NAS: Odroid M1S, Armbian (arm64), LAN-IP `192.168.68.59`; Docker
+есть, контейнеры ведутся через Portainer (:9000) или из консоли. Tailscale
+установлен и подключён как `odroidm1s` (`100.123.127.87`); `tailscale ping
+konotop` проходит. Serve включён на `konotop` (`konotop.tailb4dba1.ts.net`) и
+проверен с NAS (HTTPS 200). Поверх сейчас временно стоит OMV, но на него не
+опираемся. Для моста выбраны LAN-порты panel `8095`, SSH relay `2222`, SOCKS
+relay `1080`; перед деплоем проверять свободность.
 
 **Files:**
-- Create: `network/cloudflared/config.yml`, `network/cloudflared/runbook.md`
+- Create: `network/nas/nas-bridge-runbook.md`, `network/nas/.env.sample`
 
 **Interfaces:**
-- Consumes: Caddy на `localhost:80` (Phase 4).
-- Produces: публичный `https://<host>` на веб-морду, за Cloudflare Access.
+- Consumes: tailnet-IP `konotop` = `100.65.92.104` (Task 6), LAN-IP NAS.
+- Produces: NAS как узел tailnet, видящий `konotop`; точка входа для рабочего ноута.
 
-- [ ] **Step 1: config.yml**
-
-```yaml
-# network/cloudflared/config.yml — креды на p4
-tunnel: <TUNNEL_UUID>
-credentials-file: /srv/persist/cloudflared/<TUNNEL_UUID>.json
-ingress:
-  - hostname: dash.example.com
-    service: http://localhost:80
-  - service: http_status:404
-```
-
-- [ ] **Step 2: runbook**
-
-```markdown
-# network/cloudflared/runbook.md
-1. `cloudflared tunnel login`
-2. `cloudflared tunnel create konotop`
-3. Переместить креды в /srv/persist/cloudflared/ (p4).
-4. DNS: `cloudflared tunnel route dns konotop dash.example.com`
-5. Cloudflare Zero Trust → Access → приложение на dash.example.com,
-   политика: email = <твой email>, метод One-time PIN.
-6. Запуск как сервис: `cloudflared service install`, конфиг из config.yml.
-```
-
-- [ ] **Step 3: Проверка**
-
-Run: с чужой сети открыть `https://dash.example.com`
-Expected: запрос email-кода (Access), после ввода — веб-морда.
-
-- [ ] **Step 4: Commit**
+- [x] **Step 1: Установить Tailscale на NAS (runbook + .env.sample)**
 
 ```bash
-git add network/cloudflared/
-git commit -m "feat(network): cloudflare tunnel + access for public dashboard"
+# на NAS (Armbian):
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up            # авторизоваться по ссылке
+# заполнить network/nas/.env из .env.sample: KONOTOP_TS_IP, KONOTOP_HOST, порты
 ```
 
----
+- [x] **Step 2: Проверка связности**
+
+Run: на NAS `tailscale status`, `tailscale ping konotop` и
+`curl -I https://konotop.tailb4dba1.ts.net/`
+Expected: NAS и `konotop` в tailnet, ping проходит, Serve отдаёт HTTP 200.
+
+- [x] **Step 3: Commit**
+
+```bash
+git add network/nas/nas-bridge-runbook.md network/nas/.env.sample
+git commit -m "feat(network): nas joined to tailnet as bridge to konotop"
+```
+
+### Task 8: Доступ к веб-панели и SSH konotop с рабочего ноута через NAS
+
+Закрывает потребности 1 (веб-панель) и 2 (SSH). NAS проксирует запросы рабочего
+ноута из LAN в tailnet к `konotop`.
+
+**Files:**
+- Create: `network/nas/docker-compose.yml`, `network/nas/Caddyfile`, `network/nas/homepage-konotop-group.yaml`
+- Update: `network/nas/nas-bridge-runbook.md`
+
+**Interfaces:**
+- Consumes: NAS в tailnet (Task 7); Caddy `konotop` через `tailscale serve` (Phase 4); sshd `konotop:22`.
+- Produces: Homepage NAS на `<NAS_LAN_IP>:<PANEL_PORT>`, ссылки на сервисы konotop и SSH-релей `<NAS_LAN_IP>:2222` → konotop.
+
+- [x] **Step 1: konotop — опубликовать панель в tailnet**
+
+```bash
+# на konotop (Caddy слушает только 127.0.0.1:80):
+sudo tailscale serve --bg 80
+tailscale serve status   # https://konotop.tailb4dba1.ts.net → 127.0.0.1:80
+```
+
+- [x] **Step 2: NAS — reverse proxy к панели (Caddy-контейнер)**
+
+```bash
+cp network/nas/.env.sample network/nas/.env   # проверить LAN-IP и tailnet hostname
+sudo docker compose --env-file .env -f docker-compose.yml up -d panel-proxy
+# ssh-relay запускается отдельным шагом ниже
+# Caddy слушает на LAN-IP:8095 и проксирует на tailnet-IP konotop с TLS hostname
+```
+
+- [x] **Step 3: (опция) ссылки на konotop в Homepage NAS**
+
+```yaml
+# network/nas/homepage-konotop-group.yaml добавлена в Homepage NAS;
+# перед правкой сделана резервная копия services.yaml.
+```
+
+- [x] **Step 4: Развернуть SSH TCP-релей на NAS**
+
+На NAS sshd запрещает TCP forwarding, поэтому в Docker Compose работает socat
+TCP-релей `<NAS_LAN_IP>:2222` → `100.65.92.104:22`. Проверено с Mac из LAN:
+SSH-команда через relay выполнилась на `konotop`.
+
+Порт на NAS слушает только LAN-IP `192.168.68.59`; ключевая аутентификация и
+host key остаются end-to-end с konotop.
+
+- [x] **Step 5: Настроить SSH на рабочем ноуте**
+
+```
+# ~/.ssh/config на рабочем ноуте
+Host konotop
+    HostName 192.168.68.59
+    Port 2222
+    User duhon
+    IdentityFile ~/.ssh/<WORK_KEY>
+```
+
+Добавить публичный ключ рабочего ноута в `authorized_keys` только на konotop;
+NAS ключ не хранит. SSH-шифрование и host-key проверка остаются end-to-end.
+
+- [x] **Step 6: Проверка с рабочего ноута (закрывает потребности 1 и 2)**
+
+Run: с рабочего ноута открыть `http://<NAS_LAN_IP>:<PANEL_PORT>`, перейти по ссылкам на сервисы и выполнить `ssh konotop`.
+Expected: Homepage NAS показывает ссылки; сервисы открываются без ошибок; SSH-вход по ключу работает.
+
+- [x] **Step 7: Commit**
+
+```bash
+git add network/nas/docker-compose.yml network/nas/Caddyfile network/nas/homepage-konotop-group.yaml network/nas/nas-bridge-runbook.md
+git commit -m "feat(network): web panel + ssh to konotop via nas bridge"
+```
+
+### Task 9: Домашний IP для браузера рабочего ноута через NAS → SOCKS5 konotop
+
+Закрывает потребность 3: сайты видят домашний IP родителей, когда браузер
+рабочего ноута ходит через цепочку NAS-релей → SOCKS5 без авторизации на
+`konotop`. Селективно (через прокси идёт только браузер), поэтому Exit Node на
+NAS не нужен.
+
+**Files:**
+- Update: `network/nas/docker-compose.yml` (сервис `socks-relay`), `network/nas/nas-bridge-runbook.md`, `network/nas/test-socks-route.sh`, `proxy/socks5-compose.yml`, `services/.env.sample`, `proxy/README.md`
+- Consumes: `proxy/socks5-compose.yml` (SOCKS5 на konotop, bind на tailnet-IP)
+
+**Interfaces:**
+- Consumes: NAS в tailnet (Task 7), SOCKS5 `100.65.92.104:1080` на konotop.
+- Produces: `<NAS_LAN_IP>:<SOCKS_PORT>` → выход домашним IP; без авторизации,
+  поэтому доступен устройствам в доверенной LAN.
+
+- [x] **Step 1: konotop — SOCKS5 без авторизации на tailnet-IP**
+
+```bash
+# на konotop: KONOTOP_TS_IP хранится в /srv/persist/services.env
+sudo docker compose --env-file /srv/persist/services.env \
+  -f proxy/socks5-compose.yml up -d
+sudo ss -ltnp | grep 100.65.92.104:1080   # слушает только на tailnet-IP
+```
+
+- [x] **Step 2: NAS — TCP-релей LAN → SOCKS5 konotop**
+
+```bash
+docker compose -f network/nas/docker-compose.yml up -d socks-relay
+# socat: <NAS_LAN_IP>:<SOCKS_PORT> → ${KONOTOP_TS_IP}:1080 (без авторизации)
+```
+
+- [x] **Step 3: Браузер рабочего ноута через прокси — выполнено в Phase 6, Task 16**
+
+```markdown
+# Chrome + Proxy SwitchyOmega, профиль SOCKS5:
+#   Server <NAS_LAN_IP>, Port <SOCKS_PORT>, authentication none
+# Тумблер = только браузер через дом.
+```
+
+- [x] **Step 4: Проверка (закрывает потребность 3)**
+
+Run: из konotop запросить `https://ifconfig.me/ip` напрямую и через NAS SOCKS-релей.
+Expected: запрос через proxy не требует auth и совпадает с прямым домашним egress.
+Проверено скриптом `network/nas/test-socks-route.sh`.
+
+- [x] **Step 5: Настроить и проверить прокси на рабочем ноуте — выполнено в Phase 6, Task 16**
+
+Run: включить SOCKS5 профиль (`<NAS_LAN_IP>:1080`, без auth) и открыть
+`https://ifconfig.me/ip`.
+Expected: виден домашний IP.
+
+- [x] **Step 6: Commit — конфигурация NAS-релея зафиксирована в Git**
+
+```bash
+git add network/nas/docker-compose.yml network/nas/nas-bridge-runbook.md
+git commit -m "feat(network): work-laptop browser exits via home ip through nas"
+```
 
 ## Phase 4 — Docker-стек
 
-### Task 8: Docker + Caddy + сервисы (compose)
+### Task 10: Docker + Caddy + сервисы (compose)
 
 **Files:**
 - Create: `services/docker-compose.yml`, `services/Caddyfile`, `services/.env.sample`
@@ -561,7 +743,7 @@ git commit -m "feat(network): cloudflare tunnel + access for public dashboard"
 - Consumes: HDD `/srv/data`, p4 `/srv/persist/services.env`.
 - Produces: qBittorrent, filebrowser за Caddy на `localhost:80`.
 
-- [ ] **Step 1: docker-compose.yml**
+- [x] **Step 1: docker-compose.yml**
 
 ```yaml
 # services/docker-compose.yml
@@ -589,7 +771,7 @@ services:
 volumes: { caddy_data: {}, qbt_config: {}, fb_db: {} }
 ```
 
-- [ ] **Step 2: Caddyfile**
+- [x] **Step 2: Caddyfile**
 
 ```
 # services/Caddyfile — внутренний прокси, TLS не нужен (Tailscale/CF снаружи)
@@ -600,7 +782,7 @@ volumes: { caddy_data: {}, qbt_config: {}, fb_db: {} }
 }
 ```
 
-- [ ] **Step 3: .env.sample**
+- [x] **Step 3: .env.sample**
 
 ```
 # services/.env.sample — реальный .env лежит на p4 (/srv/persist/services.env), симлинк сюда
@@ -608,24 +790,25 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```
 
-- [ ] **Step 4: Проверка конфигурации**
+- [x] **Step 4: Проверка конфигурации**
 
-Run: `cd services && docker compose config && docker compose up -d && curl -s localhost:80`
-Expected: `docker compose config` без ошибок; `curl` → `konotop up`; `/torrent/` и `/files/` отвечают.
+Проверено на konotop: `docker compose config --quiet` проходит; маршруты `/`,
+`/torrent/`, `/files/` и `/portainer/` возвращают HTTP 200. Стек уже запущен;
+повторно пересоздавать его для проверки не потребовалось.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/docker-compose.yml services/Caddyfile services/.env.sample
 git commit -m "feat(services): docker stack — caddy, qbittorrent, filebrowser"
 ```
 
-### Task 9: Дашборд Homepage
+### Task 11: Дашборд Homepage
 
 **Files:**
 - Create: `services/homepage/{services.yaml,settings.yaml,widgets.yaml}`; Modify: `services/docker-compose.yml`
 
-- [ ] **Step 1: Добавить homepage в compose**
+- [x] **Step 1: Добавить homepage в compose**
 
 ```yaml
 # добавить сервис в services/docker-compose.yml
@@ -639,7 +822,7 @@ git commit -m "feat(services): docker stack — caddy, qbittorrent, filebrowser"
 ```
 И в Caddyfile корень `handle /` заменить на `reverse_proxy homepage:3000`.
 
-- [ ] **Step 2: homepage/services.yaml**
+- [x] **Step 2: homepage/services.yaml**
 
 ```yaml
 - Сервисы:
@@ -647,24 +830,24 @@ git commit -m "feat(services): docker stack — caddy, qbittorrent, filebrowser"
     - Файлы:       { href: /files/,   description: Файлы,     container: filebrowser }
 ```
 
-- [ ] **Step 3: homepage/widgets.yaml (место на диске)**
+- [x] **Step 3: homepage/widgets.yaml (место на диске)**
 
 ```yaml
 - resources: { disk: /data, cpu: true, memory: true }
 ```
 
-- [ ] **Step 4: homepage/settings.yaml**
+- [x] **Step 4: homepage/settings.yaml**
 
 ```yaml
 title: konotop
 ```
 
-- [ ] **Step 5: Проверка**
+- [x] **Step 5: Проверка**
 
-Run: `cd services && docker compose up -d && curl -s localhost:80 | grep -i konotop`
-Expected: HTML дашборда со статусом контейнеров и виджетом диска.
+Результат: проверка Homepage выполнена ранее; позднее Homepage на konotop удалён,
+дашборд доступен на NAS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add services/homepage services/docker-compose.yml services/Caddyfile
@@ -675,7 +858,7 @@ git commit -m "feat(services): homepage dashboard with status and disk widget"
 
 ## Phase 5 — SMS→Telegram мост (полноценный код + TDD)
 
-### Task 10: Парсер SMS из mmcli
+### Task 12: Парсер SMS из mmcli
 
 **Files:**
 - Create: `sms-bridge/pyproject.toml`, `sms-bridge/src/sms_bridge/__init__.py`, `sms-bridge/src/sms_bridge/modem.py`, `sms-bridge/tests/test_modem.py`
@@ -683,7 +866,7 @@ git commit -m "feat(services): homepage dashboard with status and disk widget"
 **Interfaces:**
 - Produces: `modem.list_message_ids(runner) -> list[str]`; `modem.read_message(runner, msg_id) -> Sms` где `Sms = dataclass(id:str, sender:str, text:str, timestamp:str)`; `runner` — callable `(list[str]) -> str` (обёртка над subprocess, для тестируемости).
 
-- [ ] **Step 1: pyproject.toml**
+- [x] **Step 1: pyproject.toml**
 
 ```toml
 [project]
@@ -697,7 +880,7 @@ dev = ["pytest>=8"]
 pythonpath = ["src"]
 ```
 
-- [ ] **Step 2: Написать падающий тест парсера списка**
+- [x] **Step 2: Написать падающий тест парсера списка**
 
 ```python
 # sms-bridge/tests/test_modem.py
@@ -718,7 +901,7 @@ def test_list_message_ids_parses_paths():
 Run: `cd sms-bridge && pip install -e '.[dev]' && pytest tests/test_modem.py -v`
 Expected: FAIL (`module modem has no attribute list_message_ids`).
 
-- [ ] **Step 4: Реализовать парсер списка**
+- [x] **Step 4: Реализовать парсер списка**
 
 ```python
 # sms-bridge/src/sms_bridge/modem.py
@@ -737,7 +920,7 @@ def list_message_ids(runner) -> list[str]:
     return re.findall(r"/SMS/(\d+)", out)
 ```
 
-- [ ] **Step 5: Тест детального парсинга (падающий)**
+- [x] **Step 5: Тест детального парсинга (падающий)**
 
 ```python
 # добавить в tests/test_modem.py
@@ -763,7 +946,7 @@ def test_read_message_parses_fields():
 Run: `pytest tests/test_modem.py::test_read_message_parses_fields -v`
 Expected: FAIL.
 
-- [ ] **Step 7: Реализовать read_message**
+- [x] **Step 7: Реализовать read_message**
 
 ```python
 # добавить в modem.py
@@ -783,19 +966,20 @@ def delete_message(runner, msg_id: str) -> None:
     runner(["mmcli", "-m", "any", "--messaging-delete-sms", msg_id])
 ```
 
-- [ ] **Step 8: Запустить все тесты**
+- [x] **Step 8: Запустить все тесты**
 
 Run: `pytest tests/test_modem.py -v`
-Expected: PASS (оба теста).
+Result: PASS (5 tests, Python 3.12); added coverage for the empty-list output
+observed on konotop (`modem.messaging.sms : 0`).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add sms-bridge/pyproject.toml sms-bridge/src/sms_bridge/__init__.py sms-bridge/src/sms_bridge/modem.py sms-bridge/tests/test_modem.py
 git commit -m "feat(sms): mmcli SMS parser with tests"
 ```
 
-### Task 11: Отправка в Telegram
+### Task 13: Отправка в Telegram
 
 **Files:**
 - Create: `sms-bridge/src/sms_bridge/telegram.py`, `sms-bridge/tests/test_telegram.py`
@@ -803,7 +987,7 @@ git commit -m "feat(sms): mmcli SMS parser with tests"
 **Interfaces:**
 - Produces: `telegram.format_message(sms: Sms) -> str`; `telegram.send(token, chat_id, text, poster=requests.post) -> bool`.
 
-- [ ] **Step 1: Тест форматирования (падающий)**
+- [x] **Step 1: Тест форматирования (падающий)**
 
 ```python
 # sms-bridge/tests/test_telegram.py
@@ -821,7 +1005,7 @@ def test_format_message_includes_sender_and_text():
 Run: `pytest tests/test_telegram.py -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Реализовать format_message + send**
+- [x] **Step 3: Реализовать format_message + send**
 
 ```python
 # sms-bridge/src/sms_bridge/telegram.py
@@ -839,7 +1023,7 @@ def send(token: str, chat_id: str, text: str, poster=requests.post) -> bool:
     return getattr(r, "status_code", 500) == 200
 ```
 
-- [ ] **Step 4: Тест send с моком (падающий → пишем сразу)**
+- [x] **Step 4: Тест send с моком (падающий → пишем сразу)**
 
 ```python
 # добавить в tests/test_telegram.py
@@ -857,19 +1041,19 @@ def test_send_posts_to_telegram_api():
     assert calls["json"] == {"chat_id": "42", "text": "hi"}
 ```
 
-- [ ] **Step 5: Запустить все тесты**
+- [x] **Step 5: Запустить все тесты**
 
 Run: `pytest tests/test_telegram.py -v`
-Expected: PASS.
+Result: PASS (в составе полного офлайн-набора: 12 тестов, Python 3.12).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add sms-bridge/src/sms_bridge/telegram.py sms-bridge/tests/test_telegram.py
 git commit -m "feat(sms): telegram formatting and send with tests"
 ```
 
-### Task 12: Цикл моста + конфиг + запуск
+### Task 14: Цикл моста + конфиг + запуск
 
 **Files:**
 - Create: `sms-bridge/src/sms_bridge/config.py`, `sms-bridge/src/sms_bridge/bridge.py`, `sms-bridge/src/sms_bridge/__main__.py`, `sms-bridge/tests/test_bridge.py`, `sms-bridge/Dockerfile`; Modify: `services/docker-compose.yml`
@@ -878,7 +1062,7 @@ git commit -m "feat(sms): telegram formatting and send with tests"
 - Consumes: `modem.*`, `telegram.*`.
 - Produces: `bridge.forward_new(runner, token, chat_id, sender=telegram.send) -> int` (число пересланных, удаляет обработанные).
 
-- [ ] **Step 1: Тест цикла (падающий)**
+- [x] **Step 1: Тест цикла (падающий)**
 
 ```python
 # sms-bridge/tests/test_bridge.py
@@ -913,7 +1097,7 @@ def test_forward_new_sends_and_deletes():
 Run: `pytest tests/test_bridge.py -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Реализовать bridge.forward_new**
+- [x] **Step 3: Реализовать bridge.forward_new**
 
 ```python
 # sms-bridge/src/sms_bridge/bridge.py
@@ -929,7 +1113,7 @@ def forward_new(runner, token, chat_id, sender=telegram.send) -> int:
     return count
 ```
 
-- [ ] **Step 4: config.py + __main__.py (loop)**
+- [x] **Step 4: config.py + __main__.py (loop)**
 
 ```python
 # sms-bridge/src/sms_bridge/config.py
@@ -959,12 +1143,13 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 5: Запустить все тесты моста**
+- [x] **Step 5: Запустить все тесты моста**
 
 Run: `pytest -v`
-Expected: PASS (все тесты modem/telegram/bridge).
+Result: PASS (12 тестов, Python 3.12); real modem and Telegram network calls were
+not used.
 
-- [ ] **Step 6: Dockerfile + добавить в compose**
+- [x] **Step 6: Dockerfile + добавить в compose**
 
 ```dockerfile
 # sms-bridge/Dockerfile
@@ -987,45 +1172,45 @@ CMD ["python", "-m", "sms_bridge"]
     privileged: true   # доступ к модему; сузить до нужных cap при обкатке
 ```
 
-- [ ] **Step 7: Проверка на боксе (нужен модем)**
+- [x] **Step 7: Проверка на боксе с реальной SMS (перенесено в Phase 8)**
 
-Run: отправить SMS на SIM в MC7304 → проверить Telegram.
-Expected: сообщение пришло в бота; SMS удалена из модема (`mmcli -m any --messaging-list-sms` пуст).
+Перенесено в Phase 8 (Task 20, On-site испытания в Украине): текущая связка в
+Техасе не ловит частоты AT&T на европейском MC7304. Офлайн-проверка кода,
+тестов и D-Bus ModemManager полностью завершена (12 unit-тестов пройдены).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add sms-bridge/src sms-bridge/tests/test_bridge.py sms-bridge/Dockerfile services/docker-compose.yml
 git commit -m "feat(sms): bridge loop, config, docker packaging"
 ```
 
-### Task 13: СПАЙК — голос на MC7304
+### Task 15: СПАЙК — голос на MC7304
 
 **Files:**
 - Create: `sms-bridge/spike-voice.md` (результат; код спайка — throwaway)
 
-- [ ] **Step 1: Проверить голосовые возможности модема**
+- [x] **Step 1: Проверить голосовые возможности модема (API без звонка)**
 
-Run на боксе:
+Проверено на боксе через ModemManager D-Bus:
 ```bash
-mmcli -m any | grep -iE 'voice|supported'   # есть ли voice в capabilities
-mmcli -m any --voice-list-calls             # поддержка команд голоса
-# при наличии voice: попробовать mmcli -m any --voice-create-call=number=<num>
+busctl --system introspect org.freedesktop.ModemManager1 \
+  /org/freedesktop/ModemManager1/Modem/0 \
+  org.freedesktop.ModemManager1.Modem.Voice
+mmcli -m any --voice-list-calls
 ```
 
-- [ ] **Step 2: Записать вывод и решение**
+Интерфейс `Modem.Voice` предоставляет `CreateCall`/`ListCalls`, но это
+подтверждает только наличие общего API ModemManager, а не поддержку звонков
+прошивкой модема. Текущая прошивка `SWI9X15C_05.05.78.00`; голосовые звонки на
+ней не подтверждены. Активных вызовов нет; исходящий вызов не выполнялся.
 
-```markdown
-# sms-bridge/spike-voice.md
-## Результат
-- Voice в capabilities: <да/нет>
-- --voice-* команды: <работают/ошибка>
-## Решение
-- Если voice есть → отдельный план на звонки (SIP-мост к приложению телефона).
-- Если нет → звонки отклоняются или внешний GSM-шлюз/другой модем.
-```
+- [x] **Step 2: Записать вывод и решение**
 
-- [ ] **Step 3: Commit**
+Результат, неопределённость прошивки и ограничение live-проверки записаны в
+`sms-bridge/spike-voice.md`.
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add sms-bridge/spike-voice.md
@@ -1034,9 +1219,79 @@ git commit -m "spike(sms): MC7304 voice capability investigation"
 
 ---
 
-## Phase 6 — Exit-прокси
+## Phase 6 — Финальные проверки
 
-### Task 14: SOCKS5 для личных устройств (bind на tailnet)
+### Task 16: Финальная проверка и закрытие проекта
+
+Выполнять после завершения отладки и выбора сетевого доступа для рабочих устройств.
+
+- [x] Настроить и проверить SOCKS5-прокси в браузере рабочего ноута (`<NAS_LAN_IP>:<SOCKS_PORT>`, без авторизации, только для браузера); проверить `https://ifconfig.me/ip` → домашний IP (выполнено, перенесено из Phase 3, Task 9).
+- [ ] Проверить веб-сервисы через выбранный путь доступа (NAS-мост из Phase 3; Cloudflare из Phase 7, если оставлен).
+- [ ] После подтверждения SSH-доступа через tailnet привязать sshd только к tailnet-IP; проверить вход по ключу и отсутствие слушателей на `0.0.0.0` и `[::]`.
+- [ ] Провести финальную проверку загрузки, восстановления, закрытия крышки и автозапуска от питания.
+- [ ] Решить расхождение APM: TLP задаёт `254` на AC, служба HDD задаёт `127`.
+- [ ] Обновить golden snapshot после окончательных изменений.
+- [ ] Запустить тесты проекта, обновить чекбоксы и зафиксировать изменения в Git.
+
+## Phase 7 — Опциональные альтернативы доступа
+
+Резерв на случай, если NAS-мост (Phase 3) не подойдёт или понадобится публичный
+адрес панели. Реализовывать только по необходимости; конфиги подготовлены ранее.
+
+### Task 17: Cloudflare Tunnel + Access (опционально)
+
+Нужен только если решено дать веб-панели публичный hostname. Требуется домен.
+
+**Files:**
+- Create: `network/cloudflared/config.yml`, `network/cloudflared/runbook.md`
+
+**Interfaces:**
+- Consumes: Caddy на `localhost:80` (Phase 4).
+- Produces: публичный `https://<host>` на веб-морду, за Cloudflare Access.
+
+- [x] **Step 1: config.yml**
+
+```yaml
+# network/cloudflared/config.yml — креды на p4
+tunnel: <TUNNEL_UUID>
+credentials-file: /srv/persist/cloudflared/<TUNNEL_UUID>.json
+ingress:
+  - hostname: dash.example.com
+    service: http://localhost:80
+  - service: http_status:404
+```
+
+- [x] **Step 2: runbook**
+
+```markdown
+# network/cloudflared/runbook.md
+1. `cloudflared tunnel login`
+2. `cloudflared tunnel create konotop`
+3. Переместить креды в /srv/persist/cloudflared/ (p4).
+4. DNS: `cloudflared tunnel route dns konotop dash.example.com`
+5. Cloudflare Zero Trust → Access → приложение на dash.example.com,
+   политика: email = <твой email>, метод One-time PIN.
+6. Запуск как сервис: `cloudflared service install`, конфиг из config.yml.
+```
+
+- [ ] **Step 3: Проверка**
+
+Run: с чужой сети открыть `https://dash.example.com`
+Expected: запрос email-кода (Access), после ввода — веб-морда.
+
+- [x] **Step 4: Commit**
+
+```bash
+git add network/cloudflared/
+git commit -m "feat(network): cloudflare tunnel + access for public dashboard"
+```
+
+---
+
+### Task 18: SOCKS5 для личных устройств (bind на tailnet, опционально)
+
+Если личные устройства используют Tailscale Exit Node напрямую, отдельный SOCKS5
+может быть не нужен.
 
 **Files:**
 - Create: `proxy/socks5-compose.yml`
@@ -1045,7 +1300,7 @@ git commit -m "spike(sms): MC7304 voice capability investigation"
 - Consumes: tailnet-IP (Task 6).
 - Produces: SOCKS5 на `<TAILNET_IP>:1080`, доступный только из tailnet.
 
-- [ ] **Step 1: socks5-compose.yml**
+- [x] **Step 1: socks5-compose.yml**
 
 ```yaml
 # proxy/socks5-compose.yml — bind ТОЛЬКО на tailnet-IP (не 0.0.0.0)
@@ -1055,30 +1310,31 @@ services:
     restart: unless-stopped
     ports: ["<TAILNET_IP>:1080:1080"]
     environment:
-      - PROXY_USER=konotop
-      - PROXY_PASSWORD=${SOCKS_PASSWORD}
+      REQUIRE_AUTH: "false"
 ```
 
 - [ ] **Step 2: Проверка**
 
-Run: с личного устройства (в tailnet): `curl --socks5 konotop:${SOCKS_PASSWORD}@<TAILNET_IP>:1080 https://ifconfig.me`
+Run: с личного устройства (в tailnet): `curl --socks5-hostname <TAILNET_IP>:1080 https://ifconfig.me`
 Expected: возвращается **домашний IP родителей** (не IP устройства). С не-tailnet устройства порт недоступен.
 
-- [ ] **Step 3: Настройка Chrome (личные устройства)**
+- [x] **Step 3: Настройка Chrome (личные устройства)**
 
 ```markdown
 # в README proxy: расширение Proxy SwitchyOmega → профиль SOCKS5
-# сервер <TAILNET_IP>:1080, логин konotop. Тумблер = только браузер через дом.
+# сервер <TAILNET_IP>:1080, без авторизации. Тумблер = только браузер через дом.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add proxy/socks5-compose.yml
 git commit -m "feat(proxy): tailnet-only socks5 for personal devices"
 ```
 
-### Task 15: СПАЙК — проверка CGNAT + реализация случая рабочего ноута
+### Task 19: Fallback для рабочего ноута — прямой прокси или VM-релей (опционально)
+
+Резерв, если NAS-мост (Phase 3) не подходит. Выбор зависит от наличия CGNAT дома.
 
 **Files:**
 - Create: `proxy/cgnat-check.md`, `proxy/forward-proxy-compose.yml`, `proxy/relay-runbook.md`
@@ -1094,7 +1350,7 @@ git commit -m "feat(proxy): tailnet-only socks5 for personal devices"
 Результат: <записать>
 ```
 
-- [ ] **Step 2: Случай 1 — форвард-прокси на боксе:443 (если НЕТ CGNAT)**
+- [x] **Step 2: Случай 1 — форвард-прокси на боксе:443 (если НЕТ CGNAT)**
 
 ```yaml
 # proxy/forward-proxy-compose.yml — HTTPS forward proxy с аутентификацией на 443
@@ -1110,7 +1366,7 @@ services:
 # Проброс порта 443 на роутере -> бокс. Chrome SwitchyOmega -> HTTPS proxy дом:443 с логином.
 ```
 
-- [ ] **Step 3: Случай 2 — бесплатный VM-релей (если ЕСТЬ CGNAT)**
+- [x] **Step 3: Случай 2 — бесплатный VM-релей (если ЕСТЬ CGNAT)**
 
 ```markdown
 # proxy/relay-runbook.md
@@ -1127,7 +1383,7 @@ services:
 Run: с рабочего ноута (только Chrome+расширение) открыть `ifconfig.me`
 Expected: домашний IP родителей; аутентификация прокси требуется.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add proxy/cgnat-check.md proxy/forward-proxy-compose.yml proxy/relay-runbook.md
@@ -1136,12 +1392,34 @@ git commit -m "feat(proxy): cgnat check, work-laptop forward proxy (both cases)"
 
 ---
 
+## Phase 8 — On-site испытания и запуск в Украине (после переезда)
+
+### Task 20: Полевая проверка модема и SMS-моста в Украине
+
+Выполняется после физической доставки и включения сервера в Украине.
+
+- [ ] **Step 1: Регистрация MC7304 в украинской сети**
+  - Вставить SIM-карту украинского оператора (Киевстар, Vodafone, lifecell) или роуминговую SIM.
+  - Проверить статус: `mmcli -m any` -> `state: connected` / `registered`.
+  - Убедиться в регистрации на поддерживаемых модемом частотах LTE: B3 (1800 МГц), B7 (2600 МГц) или B8 (900 МГц).
+
+- [ ] **Step 2: Live-тест SMS-моста в Telegram (перенесено из Task 14, Step 7)**
+  - Запустить контейнер `sms-bridge`: `docker compose up -d sms-bridge`.
+  - Отправить тестовое SMS на номер SIM-карты в MC7304.
+  - Проверить доставку сообщения в целевой Telegram-чат бота.
+  - Проверить автоматическое удаление обработанного SMS из памяти модема (`mmcli -m any --messaging-list-sms` возвращает пустой список).
+
+- [ ] **Step 3: Проверка fallback мобильного интернета / SOCKS5 (опционально)**
+  - При необходимости настроить APN оператора через NetworkManager/mmcli для резервного выхода в интернет.
+
+---
+
 ## Self-Review (выполнено при написании)
 
-**Spec coverage:** все 9 юзкейсов покрыты — 1 (Task 2 BIOS), 2 (Task 6 SSH/Tailscale), 3 (Tasks 4–5 recovery), 4 (Task 3 TLP/спиндаун), 5 (Task 8 Docker), 6а (Task 8 qBittorrent), 6б (Task 8 filebrowser), 7 (Tasks 10–12 SMS, Task 13 спайк звонков), 8 (Tasks 14–15), 9 (Tasks 8–9 дашборд + Task 7 Cloudflare). Персистентная зона p4 — Tasks 0/1/6/7/12. Конфиг-как-код — весь репозиторий.
+**Spec coverage:** все 9 юзкейсов покрыты — 1 (Task 2 BIOS), 2 (Tasks 6/8/16 SSH/Tailscale/NAS), 3 (Tasks 4–5 recovery), 4 (Task 3 TLP/спиндаун), 5–6 (Tasks 10–11 Docker/dashboard), 7 (Tasks 12–14 SMS, Task 15 voice), 8 (Tasks 7–9 NAS-мост, Task 19 fallback), 9 (Tasks 8/10–11 web dashboard, Task 17 Cloudflare опц.). Персистентная зона p4 — Tasks 0/1/6/14. Конфиг-как-код — весь репозиторий.
 
 **Placeholder scan:** оставлены только осознанные подстановки окружения (`<TAILNET_IP>`, `<TUNNEL_UUID>`, `dash.example.com`, `/dev/sdX`) — это значения, известные только на конкретном железе; помечены явно.
 
-**Type consistency:** `Sms`(id,sender,text,timestamp), `list_message_ids`, `read_message`, `delete_message`, `format_message`, `send`, `forward_new` — согласованы между Tasks 10–12.
+**Type consistency:** `Sms`(id,sender,text,timestamp), `list_message_ids`, `read_message`, `delete_message`, `format_message`, `send`, `forward_new` — согласованы между Tasks 12–14.
 
-**Известные зависимости от железа/спайков:** Tasks 1–3, 5(проверка), 7(проверка), 12(Step 7), 13, 15 требуют физического бокса/модема/сети; выполняются при развёртывании, не в этой сессии.
+**Известные зависимости от железа/спайков:** Tasks 1–3, 5(проверка), 7–9 (NAS/tailnet), 14(Step 7), 15, 16, 17(если выбран Cloudflare), 19(fallback) требуют бокса/модема/сети/NAS; выполняются при развёртывании, не в этой сессии.
