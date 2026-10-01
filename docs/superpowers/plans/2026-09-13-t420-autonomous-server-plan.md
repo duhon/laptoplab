@@ -896,7 +896,7 @@ def test_list_message_ids_parses_paths():
     assert modem.list_message_ids(runner) == ["0", "2"]
 ```
 
-- [ ] **Step 3: Запустить — убедиться, что падает**
+- [x] **Step 3: Запустить — убедиться, что падает**
 
 Run: `cd sms-bridge && pip install -e '.[dev]' && pytest tests/test_modem.py -v`
 Expected: FAIL (`module modem has no attribute list_message_ids`).
@@ -941,7 +941,7 @@ def test_read_message_parses_fields():
     assert sms.timestamp.startswith("2026-09-13")
 ```
 
-- [ ] **Step 6: Запустить — убедиться, что падает**
+- [x] **Step 6: Запустить — убедиться, что падает**
 
 Run: `pytest tests/test_modem.py::test_read_message_parses_fields -v`
 Expected: FAIL.
@@ -1000,7 +1000,7 @@ def test_format_message_includes_sender_and_text():
     assert "+7999" in msg and "Привет" in msg
 ```
 
-- [ ] **Step 2: Запустить — падает**
+- [x] **Step 2: Запустить — падает**
 
 Run: `pytest tests/test_telegram.py -v`
 Expected: FAIL.
@@ -1092,7 +1092,7 @@ def test_forward_new_sends_and_deletes():
     assert runner.deleted == ["0"]
 ```
 
-- [ ] **Step 2: Запустить — падает**
+- [x] **Step 2: Запустить — падает**
 
 Run: `pytest tests/test_bridge.py -v`
 Expected: FAIL.
@@ -1230,8 +1230,8 @@ git commit -m "spike(sms): MC7304 voice capability investigation"
 - [x] Зафиксировать политику SSH: sshd слушает на LAN/Tailscale с запретом паролей (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`, вход строго по ed25519-ключам); привязка только к Tailnet не включается во избежание потери доступа с рабочего ноутбука без Tailscale клиента.
 - [x] Провести финальную проверку загрузки, восстановления, закрытия крышки и автозапуска от питания (logind lid-ignore проверен, sleep targets замаскированы, boot-guard и boot-arm активны).
 - [x] Решить расхождение APM: TLP задаёт `254` на AC, служба HDD задаёт `127` (решено через `/etc/tlp.d/50-hdd-spindown.conf`, SSD=254, HDD=127).
-- [ ] Обновить golden snapshot после окончательных изменений.
-- [ ] Запустить тесты проекта, обновить чекбоксы и зафиксировать изменения в Git.
+- [x] Обновить golden snapshot после окончательных изменений (выполнено через `grub-reboot konotop-rebless`).
+- [x] Запустить тесты проекта, обновить чекбоксы и зафиксировать изменения в Git (все 12 unit-тестов пройдены, ветка `konotop-build` синхронизирована с `origin`).
 
 ## Phase 7 — Опциональные альтернативы доступа
 
