@@ -1,0 +1,11 @@
+[Unit]
+Description=Konotop boot guard: confirm successful userspace boot
+After=local-fs.target docker.service
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/grub-reboot konotop-normal
+
+[Install]
+WantedBy=multi-user.target

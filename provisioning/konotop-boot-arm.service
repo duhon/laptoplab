@@ -1,0 +1,11 @@
+[Unit]
+Description=Konotop boot guard: arm recovery for the next boot
+After=local-fs.target
+Before=konotop-boot-guard.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/grub-reboot konotop-recover
+
+[Install]
+WantedBy=multi-user.target

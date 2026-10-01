@@ -1,11 +1,20 @@
-menuentry 'Обычная загрузка' { search --set=root --label root; linux /boot/vmlinuz root=LABEL=root ro quiet; initrd /boot/initrd.img }
-menuentry 'ВОССТАНОВИТЬ систему (данные сохранятся)' {
+#!/bin/sh
+KERNEL="/boot/$(basename "$(readlink -f /vmlinuz)")"
+INITRD="/boot/$(basename "$(readlink -f /initrd.img)")"
+cat <<MENU
+menuentry 'Normal boot' --id konotop-normal {
   search --set=root --label root
-  linux /boot/vmlinuz ro konotop.recover=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
+  linux $KERNEL root=LABEL=root ro quiet
+  initrd $INITRD
+}
+menuentry 'Restore system (data is preserved)' --id konotop-recover {
+  search --set=root --label root
+  linux $KERNEL root=LABEL=root ro konotop.recover=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
   initrd /boot/konotop-recovery.img
 }
-menuentry 'Снять золотой снимок (для админа)' {
+menuentry 'Create golden snapshot (admin)' --id konotop-rebless {
   search --set=root --label root
-  linux /boot/vmlinuz ro konotop.rebless=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
+  linux $KERNEL root=LABEL=root ro konotop.rebless=1 ROOT_PART=/dev/disk/by-label/root REC_PART=/dev/disk/by-label/recovery
   initrd /boot/konotop-recovery.img
 }
+MENU
